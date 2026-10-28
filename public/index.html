@@ -537,6 +537,42 @@ body.signed-out main{max-width:none;padding:0}
   .credit-foot{display:flex;margin:0 16px 24px;background:var(--side)}
 }
 @media (max-width:520px){.top .btn-reset span{display:none}.demo-badge{display:none}}
+
+/* ---------- project board (kanban) ---------- */
+.kfilters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.kfilters .b{font-weight:700}
+button.chip{cursor:pointer;border:1px solid var(--line);background:var(--surface);padding:4px 11px;font-size:13px}
+button.chip.on{background:var(--accent-wash);border-color:var(--accent);color:var(--accent-ink)}
+button.chip.me{background:var(--side);color:#fff;border-color:var(--side)}
+button.chip.me.on{background:var(--side);color:#fff;border-color:#74c0fc;box-shadow:0 0 0 1px #74c0fc}
+#b-proj{background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:600;max-width:240px}
+.kboard{display:grid;grid-template-columns:repeat(5,minmax(200px,1fr));gap:12px;align-items:start;overflow-x:auto;padding-bottom:4px}
+.kcol{background:var(--surface-2);border-radius:12px;padding:8px;min-width:0}
+.kcolh{display:flex;justify-content:space-between;align-items:center;padding:4px 6px 8px;font-weight:700;font-size:14px}
+.kcolh .n{background:var(--surface);border-radius:999px;padding:0 8px;font-size:12px;color:var(--ink-2)}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}
+.kdrop{min-height:60px;border-radius:10px;transition:background .1s}
+.kdrop.over{background:var(--accent-wash);outline:2px dashed var(--accent);outline-offset:-2px}
+.kcard{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 11px;margin-bottom:8px;cursor:grab;box-shadow:0 1px 2px rgba(23,32,54,.04)}
+.kcard:hover{border-color:var(--accent)}
+.kcard.dragging{opacity:.45}
+.kcard .kc-h{display:flex;justify-content:space-between;gap:6px;align-items:flex-start;margin-bottom:5px}
+.kcard .kc-h b{font-size:14px;overflow-wrap:anywhere}
+.kmenu-btn{border:0;background:none;color:var(--ink-3);font-size:16px;line-height:1;padding:0 4px;cursor:pointer;border-radius:6px}
+.kmenu-btn:hover{background:var(--surface-2);color:var(--ink)}
+.kc-m{display:flex;justify-content:space-between;gap:6px;margin-top:7px;color:var(--ink-2);flex-wrap:wrap}
+.soon{color:var(--warn);font-weight:700}
+.wtag{background:var(--warn-wash);color:var(--warn);border-radius:999px;padding:1px 8px;font-weight:700}
+.kcol[data-stage="payment"] .wtag{background:var(--sky-wash);color:var(--sky)}
+.kcard.isdone{opacity:.72}.kcard.isdone .kc-h b{text-decoration:line-through;color:var(--ink-3)}
+.kmenu{position:absolute;right:6px;top:30px;z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 24px rgba(0,0,0,.14);padding:5px;display:flex;flex-direction:column;min-width:180px}
+.kmenu button{background:none;border:0;text-align:left;padding:7px 10px;border-radius:7px;font-weight:600;cursor:pointer}
+.kmenu button:hover{background:var(--surface-2)}
+.kmenu hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+.kadd input{width:100%;background:transparent;border:1px dashed transparent;border-radius:8px;padding:7px 8px;color:var(--ink-2);font-weight:600}
+.kadd input:focus,.kadd input:hover{border-color:var(--line);background:var(--surface);outline:none}
+@media (max-width:760px){.kboard{grid-template-columns:repeat(5,82vw);scroll-snap-type:x mandatory}.kcol{scroll-snap-align:start}}
+body.wide main{max-width:1480px}
 </style>
 </head>
 <body>

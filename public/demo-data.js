@@ -31,7 +31,7 @@ window.JCRM_SEED = function (now) {
 
   let n = 0; const id = p => p + (++n).toString(36);
 
-  const db = { settings: {}, clients: {}, entries: {}, invoices: {}, notes: {}, reminders: {}, projects: {}, deals: {}, expenses: {}, recurring: {} };
+  const db = { settings: {}, clients: {}, entries: {}, invoices: {}, notes: {}, reminders: {}, projects: {}, deals: {}, expenses: {}, recurring: {}, tasks: {} };
 
   db.settings.main = {
     business: { name: "Jono CRM Demo Studio", address1: "123 Main Street, Suite 200", address2: "Anytown, FL 33000",
@@ -81,24 +81,44 @@ window.JCRM_SEED = function (now) {
   const email = cid => db.clients[cid].email;
 
   /* ---------- projects ---------- */
-  const comp = (name, due, doneAgo) => ({ id: id("k"), name, due: due == null ? "" : D(due), done: doneAgo != null, doneDate: doneAgo != null ? D(-doneAgo) : null });
+  // stage/waitAgo are for open (not-done) components, to spread the board's "doing"/"waiting on client" columns.
+  const comp = (name, due, doneAgo, stage, waitAgo) => ({ id: id("k"), name, due: due == null ? "" : D(due), done: doneAgo != null,
+    doneDate: doneAgo != null ? D(-doneAgo) : null, stage: doneAgo == null ? (stage || "todo") : null, stageAt: doneAgo == null && waitAgo != null ? D(-waitAgo) : null });
   const P = (pid, o) => { db.projects[pid] = Object.assign({ createdAt: at(o.start), updatedAt: at(T), by: "jordan" }, o); };
   P("hp-site", { clientId: "harbor-pine", name: "Website redesign", status: "active", start: D(-52), due: D(16), budget: 9800,
     description: "New mobile-friendly site with online booking, service pages and refreshed photography.",
     components: [comp("Discovery & sitemap", null, 45), comp("Homepage design", null, 30), comp("Service pages", null, 12),
-      comp("Online booking setup", 3), comp("Content & photo upload", 9), comp("Launch & SEO check", 16)] });
+      comp("Online booking setup", 3, null, "doing"), comp("Content & photo upload", 9, null, "waiting", 4), comp("Launch & SEO check", 16)] });
   P("cl-labels", { clientId: "copperleaf", name: "Seasonal bag labels", status: "active", start: D(-24), due: D(6), budget: 1800,
     description: "Holiday blend labels for 12 oz and 2 lb bags, plus matching Instagram posts.",
-    components: [comp("Label concepts", null, 15), comp("Final label art", -1), comp("Print-ready files", 6), comp("Launch posts", 10)] });
+    components: [comp("Label concepts", null, 15), comp("Final label art", -1), comp("Print-ready files", 6, null, "doing"), comp("Launch posts", 10)] });
   P("bs-social", { clientId: "brightside-pt", name: "Monthly social & email", status: "active", start: D(-105), due: "", budget: 0,
     description: "Ongoing retainer: weekly social posts, a monthly patient newsletter and a short analytics report.",
-    components: [comp("Patient newsletter", null, 8), comp("Social calendar", null, 5), comp("Holiday promo graphics", 11), comp("Monthly report", 4)] });
+    components: [comp("Patient newsletter", null, 8), comp("Social calendar", null, 5), comp("Holiday promo graphics", 11, null, "waiting", 2), comp("Monthly report", 4, null, "doing")] });
   P("sr-deck", { clientId: "summit-ridge", name: "Pitch deck & branded PDFs", status: "hold", start: D(-60), due: D(30), budget: 3200,
     description: "Investor deck and three case-study PDFs. Paused while the client finalizes numbers.",
-    components: [comp("Deck outline", null, 50), comp("Slide design", null, 28), comp("Case study PDFs"), comp("Final revisions")] });
+    components: [comp("Deck outline", null, 50), comp("Slide design", null, 28), comp("Case study PDFs", null, null, "waiting", 18), comp("Final revisions")] });
   P("om-menu", { clientId: "old-mill", name: "Menu & signage", status: "done", start: D(-175), due: D(-140), budget: 1500, doneDate: D(-140),
     description: "New counter menu, window signage and chalkboard art files.",
     components: [comp("Menu layout", null, 160), comp("Window signage", null, 150), comp("Chalkboard art files", null, 141)] });
+
+  /* ---------- standalone tasks (the projects board) ----------
+     due: days from today (D(n)) or null for no due date. ago: days since the task entered its
+     current column — shown as "waiting N days" for waiting/payment, or as the completion date for done. */
+  const tsk = (clientId, name, due, stage, ago) => { const stageAt = ago != null ? D(-ago) : null;
+    db.tasks[id("t")] = { clientId, name, due: due == null ? "" : D(due), stage, stageAt,
+      doneDate: stage === "done" ? (stageAt || T) : null, createdAt: at(D(-(ago || 1) - 4)), by: "jordan" }; };
+  tsk("northgate-auto", "Quote the detailing flyer job", 4, "todo");
+  tsk("", "Draft Q1 content calendar for the studio", 10, "todo");
+  tsk("bayview-realty", "Write the listing-template proposal", 2, "doing", 3);
+  tsk("", "Add Harbor & Pine site to the studio portfolio", 5, "doing", 2);
+  tsk("crescent-law", "Waiting on their logo files & brand assets", null, "waiting", 6);
+  tsk("lumen-yoga", "Waiting on the class schedule content", null, "waiting", 2);
+  tsk("bayview-realty", "Send deposit invoice before starting flyers", null, "payment", 5);
+  tsk("old-mill", "Confirm the mailed check cleared", null, "payment", 3);
+  tsk("", "Renewed studio software subscriptions", null, "done", 2);
+  tsk("", "Sent October client invoices", null, "done", 6);
+  tsk("", "Organized 2026 tax documents", null, "done", 40);
 
   /* ---------- time entries ---------- */
   const TASKS = {

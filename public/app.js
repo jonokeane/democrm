@@ -27,7 +27,7 @@ const MARK=`<svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><defs><line
 const PAY_METHODS=["Bank transfer (ACH)","Credit card","Check","Cash","Zelle","Venmo","Cash App","PayPal","Other"];
 
 /* ---------- state ---------- */
-const S={ready:false,authed:null,me:null,users:null,settings:null,clients:{},entries:[],invoices:[],notes:[],reminders:[],projects:{},deals:[],expenses:[],recurring:[],
+const S={ready:false,authed:null,me:null,users:null,settings:null,clients:{},entries:[],invoices:[],notes:[],reminders:[],projects:{},deals:[],expenses:[],recurring:[],tasks:[],
   tab:"home",week:monday(new Date()),invFilter:"all",invClient:"",drawer:null,
   crmFilter:"active",crmQuery:"",DB:null,v:0};
 try{const t=localStorage.getItem("jcrm-tab");if(t&&["home","clients","projects","time","invoices","overview","settings"].includes(t))S.tab=t}catch(e){}
@@ -84,7 +84,7 @@ function derive(){
   const D=S.DB,obj=c=>Object.entries(D[c]||{}).map(([id,d])=>Object.assign({id},d));
   S.settings=(D.settings||{}).main||null;
   S.clients={};obj("clients").forEach(c=>S.clients[c.id]=c);
-  S.entries=obj("entries");S.invoices=obj("invoices");S.notes=obj("notes");S.reminders=obj("reminders");S.projects={};obj("projects").forEach(x=>S.projects[x.id]=x);S.deals=obj("deals");S.expenses=obj("expenses");S.recurring=obj("recurring");
+  S.entries=obj("entries");S.invoices=obj("invoices");S.notes=obj("notes");S.reminders=obj("reminders");S.projects={};obj("projects").forEach(x=>S.projects[x.id]=x);S.deals=obj("deals");S.expenses=obj("expenses");S.recurring=obj("recurring");S.tasks=obj("tasks");
 }
 function applyLocal(ops){applyOps(S.DB,ops);derive()}
 async function load(quiet){
@@ -136,6 +136,7 @@ function render(){
   const active=document.activeElement&&document.activeElement.id;
   const keep={};m.querySelectorAll("input[id],select[id],textarea[id]").forEach(el=>keep[el.id]=el.value);
   document.body.classList.toggle("signed-out",S.authed===false);
+  document.body.classList.toggle("wide",S.tab==="projects"&&S.projView==="board"&&!S.projOpen);
   const pt=$("#page-title");if(pt)pt.textContent={home:"Home",clients:"Clients",projects:"Projects",time:"Log Time",invoices:"Invoices",overview:"Money & Taxes",settings:"Settings"}[S.tab]||"";
   if(S.authed===false){m.innerHTML=viewLogin();$("#layer").innerHTML="";bindLogin();return}
   if(S.loadError){m.innerHTML=`<div class="notice bad">Your data couldn't load (${esc(S.loadError)}). Refresh the page to try again.</div>`;return}
@@ -485,6 +486,7 @@ function renderDrawer(){
         ${(()=>{const L=layoutSheet(i);const s2=w/L.W;return `<div class="sheet-wrap" style="width:${w}px;height:${Math.round(L.H*s2)}px"><div id="sheet-host" style="transform:scale(${s2});transform-origin:0 0;width:${L.W}px">${sheetHTML(i,L.W)}</div></div>${L.W>PAGE_W?`<p class="muted small" style="text-align:center;margin:0">${L.H>L.W*PAGE_H/PAGE_W+1?`Very long invoice: the PDF will run onto ${Math.ceil(L.H/(L.W*PAGE_H/PAGE_W))} pages.`:`Long invoice: shrunk to ${Math.round(PAGE_W/L.W*100)}% so it fits on one page.`}</p>`:""}`})()}
       </div></aside>`;
   } else if(d.type==="csv"){renderCsvDrawer(L)}
+  else if(d.type==="task"){renderTaskDrawer(L,d)}
   else if(d.type==="crm"||d.type==="crm-edit"){renderCrmDrawer(L,d)}
 }
 
@@ -1154,11 +1156,12 @@ function projRow(p,showClient){const st=projStats(p);const late=p.status!=="done
     <span class="small r num">${st.hours?hrs(st.hours)+" hrs":`<span class="muted">—</span>`}</span></button>`}
 function viewProjects(){
   if(S.projOpen)return viewProject();
+  if(S.projView==="board")return viewBoard();
   const all=projList();const inSet=(p,k)=>k==="all"||(k==="open"?p.status!=="done":(p.status||"active")===k);
   const filters=[["open","Open"],["active","Active"],["hold","On hold"],["done","Done"],["all","All"]];
   const l=all.filter(p=>inSet(p,S.projFilter)).sort((a,b)=>((a.status==="done")-(b.status==="done"))||((a.due||"9999")).localeCompare(b.due||"9999")||a.name.localeCompare(b.name));
   return `<section class="panel">
-    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><h2 style="margin:0">Projects</h2><button class="btn primary" data-act="proj-new">+ New project</button></div>
+    <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:12px"><div class="row" style="align-items:center;gap:12px"><h2 style="margin:0">Projects</h2>${viewToggle()}</div><div class="row" style="gap:8px"><button class="btn" data-act="task-new">+ Task</button><button class="btn primary" data-act="proj-new">+ New project</button></div></div>
     <div class="seg seg-wrap" id="proj-filter">${filters.map(([k,t])=>`<button data-f="${k}" aria-pressed="${S.projFilter===k}">${t} <span class="cnt">${all.filter(p=>inSet(p,k)).length}</span></button>`).join("")}</div>
   </section>
   <section class="panel" style="padding:6px 10px"><div class="list">${l.length?l.map(p=>projRow(p,true)).join(""):`<p class="muted" style="padding:10px 6px">${all.length?"No projects here.":"No projects yet. Create one for any job with several parts, like a website build, and break it into components you can check off."}</p>`}</div></section>`;
@@ -1366,6 +1369,7 @@ function viewHome(){
   projList().filter(p=>p.status!=="done").forEach(p=>{
     if(p.due&&p.due<=soon)dueItems.push({date:p.due,kind:"Project",name:p.name,p});
     (p.components||[]).filter(x=>!x.done&&x.due&&x.due<=soon).forEach(x=>dueItems.push({date:x.due,kind:"Component",name:x.name,p,x}))});
+  (S.tasks||[]).filter(x=>x.stage!=="done"&&x.due&&x.due<=soon).forEach(x=>dueItems.push({date:x.due,kind:"Task",name:x.name,t:x}));
   dueItems.sort((a,b)=>a.date.localeCompare(b.date));
   const fus=Object.values(S.clients).map(c=>({c,f:followUp(c)})).filter(x=>x.f&&!x.f.rem);
   const deals=S.deals.filter(openDeal);const pipe=deals.reduce((s,d)=>s+(+d.value||0),0);
@@ -1395,9 +1399,10 @@ function viewHome(){
       <h2>Due soon</h2>
       ${dueItems.length?`<div class="hlist">${dueItems.map(d=>`<div class="hrow ${d.date<t?"over":d.date===t?"today":""}">
           <span class="when">${esc(relDay(d.date))}</span>
-          <span class="what"><a href="#p/${esc(encodeURIComponent(d.p.id))}">${esc(d.name)}</a><span class="muted small"> · ${d.kind==="Component"?esc(d.p.name)+" · ":""}${cl(d.p.clientId)?esc(dname(cl(d.p.clientId))):""}</span></span>
+          <span class="what">${d.t?`<a href="#" data-act="task-open" data-id="${esc(d.t.id)}">${esc(d.name)}</a><span class="muted small"> · Task · ${esc(forLabel(d.t.clientId))}</span>`
+            :`<a href="#p/${esc(encodeURIComponent(d.p.id))}">${esc(d.name)}</a><span class="muted small"> · ${d.kind==="Component"?esc(d.p.name)+" · ":""}${cl(d.p.clientId)?esc(dname(cl(d.p.clientId))):""}</span>`}</span>
           <span class="x"><button class="btn sm ghost" data-act="demo-cal">Calendar</button></span></div>`).join("")}</div>`
-        :`<p class="muted small">No project deadlines in the next two weeks.</p>`}
+        :`<p class="muted small">No project or task deadlines in the next two weeks.</p>`}
     </section>
     <section class="panel">
       <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:8px"><h2 style="margin:0">Unpaid invoices</h2>${drafts?`<a class="small" href="#" data-go="invoices" data-filter="all">${drafts} draft${drafts===1?"":"s"} not sent</a>`:""}</div>
@@ -1633,4 +1638,146 @@ document.addEventListener("click",async e=>{const b=e.target.closest("[data-act^
     write(db=>db.doc("recurring/"+id).update({active:true,last}),"Resumed from the next due date");return}
   if(a==="rec-del"){write(db=>db.doc("recurring/"+id).delete(),"Removed. Past entries are kept.");return}
 });
+/* =====================================================================
+   PROJECT BOARD (kanban): project components + standalone tasks as cards.
+   A component's stage lives on the component; "done" stays in sync with its checkbox.
+   Standalone tasks live in tasks/<id>, tagged to a client or to the studio team.
+   ===================================================================== */
+const STAGES=[["todo","To do","var(--ink-3)"],["doing","In progress","var(--accent)"],["waiting","Waiting on client","var(--warn)"],["payment","Need payment","var(--sky)"],["done","Done this week","var(--ok)"]];
+const stageName=k=>(STAGES.find(s=>s[0]===k)||[,"To do"])[1];
+S.projView=(()=>{try{return localStorage.getItem("jcrm-projview")||"board"}catch(e){return"board"}})();
+S.bClient="";S.bProject="";S.bWeek=false;S.bShowOld=false;
+const compStage=x=>x.done?"done":(x.stage&&x.stage!=="done"?x.stage:"todo");
+const weekStart=()=>iso(monday(new Date()));
+
+function boardItems(){
+  const out=[];
+  projList().filter(p=>p.status!=="done").forEach(p=>(p.components||[]).forEach(x=>out.push({kind:"comp",id:x.id,p,x,name:x.name,due:x.due||"",stage:compStage(x),doneDate:x.doneDate||"",stageAt:x.stageAt||"",clientId:p.clientId})));
+  (S.tasks||[]).forEach(t=>out.push({kind:"task",id:t.id,t,name:t.name,due:t.due||"",stage:t.stage||"todo",doneDate:t.doneDate||"",stageAt:t.stageAt||"",clientId:t.clientId||""}));
+  return out;
+}
+const forLabel=id=>id?(S.clients[id]?dname(S.clients[id]):"Client"):"Studio team";
+function viewBoard(){
+  const all=boardItems();const t=today(),ws=weekStart(),wk=iso(addDays(new Date(),7));
+  let l=all.filter(i=>(!S.bClient||(S.bClient==="__me"?!i.clientId:i.clientId===S.bClient))&&(!S.bProject||(S.bProject==="__tasks"?i.kind==="task":i.p&&i.p.id===S.bProject))&&(!S.bWeek||i.stage==="done"||(i.due&&i.due<=wk)));
+  // Chips only for who has open work: an open project (even one with no tasks yet) or an unfinished task.
+  const clientsUsed=[...new Set([...all.filter(i=>i.stage!=="done").map(i=>i.clientId),...projList().filter(p=>p.status!=="done").map(p=>p.clientId)])];
+  if(S.bClient&&!clientsUsed.includes(S.bClient==="__me"?"":S.bClient))clientsUsed.push(S.bClient==="__me"?"":S.bClient); // keep the selected one so it can be cleared
+  const projs=projList().filter(p=>p.status!=="done").sort((a,b)=>a.name.localeCompare(b.name));
+  const cols=STAGES.map(([k,label,color])=>{
+    let items=l.filter(i=>i.stage===k);let older=0;
+    if(k==="done"){const recent=items.filter(i=>(i.doneDate||"")>=ws);older=items.length-recent.length;if(!S.bShowOld)items=recent;items.sort((a,b)=>(b.doneDate||"").localeCompare(a.doneDate||""))}
+    else items.sort((a,b)=>(a.due||"9999").localeCompare(b.due||"9999")||a.name.localeCompare(b.name));
+    return `<div class="kcol" data-stage="${k}"><div class="kcolh"><span><i class="dot" style="background:${color}"></i>${label}</span><span class="n">${items.length}</span></div>
+      <div class="kdrop" data-stage="${k}">${items.map(i=>card(i,t)).join("")}${k!=="done"?`<form class="kadd" data-stage="${k}"><input placeholder="+ Add task" aria-label="Add a task to ${esc(label)}" data-keep="no"></form>`:""}</div>
+      ${k==="done"&&older?`<button class="linkbtn small" data-act="b-old" style="padding:6px 8px">${S.bShowOld?"Show this week only":"Show older ("+older+")"}</button>`:""}</div>`}).join("");
+  return `<section class="panel" style="padding:14px 16px">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:10px">
+      <div class="row" style="align-items:center;gap:12px"><h2 style="margin:0">Projects</h2>${viewToggle()}</div>
+      <div class="row" style="gap:8px"><button class="btn" data-act="task-new">+ Task</button><button class="btn primary" data-act="proj-new">+ New project</button></div>
+    </div>
+    <div class="kfilters">
+      <span class="small muted b">Show:</span>
+      <button class="chip ${!S.bClient?"on":""}" data-bc="">All</button>
+      ${clientsUsed.includes("")?`<button class="chip me ${S.bClient==="__me"?"on":""}" data-bc="__me">Studio team</button>`:""}
+      ${clientsUsed.filter(Boolean).sort((a,b)=>forLabel(a).localeCompare(forLabel(b))).map(id=>`<button class="chip ${S.bClient===id?"on":""}" data-bc="${esc(id)}">${esc(forLabel(id))}</button>`).join("")}
+      <select id="b-proj" aria-label="Project" data-keep="no"><option value="">All projects &amp; tasks</option><option value="__tasks" ${S.bProject==="__tasks"?"selected":""}>Standalone tasks only</option>${projs.map(p=>`<option value="${esc(p.id)}" ${S.bProject===p.id?"selected":""}>${esc(p.name)}</option>`).join("")}</select>
+      <button class="chip ${S.bWeek?"on":""}" data-act="b-week" style="margin-left:auto">Due in the next 7 days</button>
+    </div>
+  </section>
+  <div class="kboard">${cols}</div>
+  <p class="muted small" style="margin:0">Drag cards between columns, or use ⋯ on a card. Project cards are that project's components; dropping one in Done checks it off.</p>`;
+}
+function card(i,t){
+  const late=i.stage!=="done"&&i.due&&i.due<t,soon=i.stage!=="done"&&i.due&&!late&&i.due<=iso(addDays(new Date(),1));
+  const waitDays=i.stageAt&&(i.stage==="waiting"||i.stage==="payment")?Math.max(0,Math.round((parse(t)-parse(i.stageAt))/864e5)):null;
+  const tagCls=i.clientId?cidx(i.clientId):"me";
+  return `<div class="kcard ${i.stage==="done"?"isdone":""}" draggable="true" data-kind="${i.kind}" data-id="${esc(i.id)}" ${i.p?`data-pid="${esc(i.p.id)}"`:""} tabindex="0">
+    <div class="kc-h"><b>${esc(i.name)}</b><button class="kmenu-btn" data-act="k-menu" aria-label="Move or edit">⋯</button></div>
+    <div><span class="chip ${tagCls}">${esc(forLabel(i.clientId))}</span> <span class="small muted">${i.p?esc(i.p.name):"Task"}</span></div>
+    <div class="kc-m small">${i.stage==="done"?`<span>Done ${i.doneDate?esc(fmtD(parse(i.doneDate))):""}</span>`
+      :waitDays!=null?`<span class="wtag">${i.stage==="payment"?"Awaiting payment":"Waiting"} ${waitDays===0?"since today":waitDays+" day"+(waitDays===1?"":"s")}</span>`
+      :i.due?`<span class="${late?"late":soon?"soon":""}">${late?"Overdue · ":"Due "}${esc(relDay(i.due))}</span>`:`<span class="muted">No due date</span>`}
+      ${i.due&&(waitDays!=null)?`<span class="${late?"late":"muted"}">Due ${esc(fmtD(parse(i.due)))}</span>`:""}</div>
+    ${S.kMenu===i.kind+":"+i.id?`<div class="kmenu">${STAGES.filter(s=>s[0]!==i.stage).map(([k,l])=>`<button data-act="k-move" data-stage="${k}">→ ${l}</button>`).join("")}
+      <hr>${i.kind==="task"?`<button data-act="task-edit">Edit task</button>`:`<button data-act="k-open">Open project</button>`}</div>`:""}
+  </div>`;
+}
+function viewToggle(){return `<div class="seg" id="proj-view"><button data-v="list" aria-pressed="${S.projView!=="board"}">List</button><button data-v="board" aria-pressed="${S.projView==="board"}">Board</button></div>`}
+
+/* ---------- moving cards ---------- */
+async function moveCard(kind,id,stage){
+  const now=today();
+  if(kind==="task"){const tk=S.tasks.find(x=>x.id===id);if(!tk||tk.stage===stage)return;
+    return write(db=>db.doc("tasks/"+id).update({stage,stageAt:now,doneDate:stage==="done"?now:null}),"Moved to "+stageName(stage))}
+  const p=projList().find(p=>(p.components||[]).some(x=>x.id===id));if(!p)return;
+  const comps=(p.components||[]).map(x=>x.id!==id?x:Object.assign({},x,{stage,stageAt:now,done:stage==="done",doneDate:stage==="done"?(x.done?x.doneDate:now):null}));
+  if(compStage(p.components.find(x=>x.id===id))===stage)return;
+  return write(db=>db.doc("projects/"+p.id).update({components:comps,updatedAt:new Date().toISOString()}),"Moved to "+stageName(stage));
+}
+let dragging=null;
+document.addEventListener("dragstart",e=>{const c=e.target.closest&&e.target.closest(".kcard");if(!c)return;dragging={kind:c.dataset.kind,id:c.dataset.id};c.classList.add("dragging");try{e.dataTransfer.setData("text/plain",c.dataset.id);e.dataTransfer.effectAllowed="move"}catch(err){}});
+document.addEventListener("dragend",e=>{document.querySelectorAll(".kcard.dragging").forEach(c=>c.classList.remove("dragging"));document.querySelectorAll(".kdrop.over").forEach(d=>d.classList.remove("over"));dragging=null});
+document.addEventListener("dragover",e=>{const d=e.target.closest&&e.target.closest(".kcol");if(!d||!dragging)return;e.preventDefault();document.querySelectorAll(".kdrop.over").forEach(x=>x!==d.querySelector(".kdrop")&&x.classList.remove("over"));d.querySelector(".kdrop").classList.add("over")});
+document.addEventListener("drop",e=>{const d=e.target.closest&&e.target.closest(".kcol");if(!d||!dragging)return;e.preventDefault();const g=dragging;dragging=null;moveCard(g.kind,g.id,d.dataset.stage)});
+
+/* ---------- task drawer ---------- */
+function renderTaskDrawer(L,d){
+  const tk=d.id?S.tasks.find(x=>x.id===d.id):null;const v=tk||{name:"",clientId:d.clientId??"",due:"",stage:d.stage||"todo"};
+  const clients=Object.values(S.clients).filter(c=>statusKey(c)!=="dnc").sort((a,b)=>dname(a).localeCompare(dname(b)));
+  L.innerHTML=`<div class="scrim" data-act="close"></div><aside class="drawer" role="dialog" aria-modal="true" aria-label="Task" style="width:min(100%,520px)">
+    <div class="drawer-h"><h2>${tk?"Edit task":"New task"}</h2><button class="btn sm ghost" data-act="close">✕ Close</button></div>
+    <div class="drawer-b"><form id="f-task" class="stack" autocomplete="off">
+      <div class="field"><label for="t-name">Task</label><input id="t-name" value="${esc(v.name)}" placeholder="e.g. Update the studio website copy" required data-keep="no"></div>
+      <div class="field"><label for="t-for">For</label><select id="t-for" data-keep="no"><option value="">Studio team</option>${clients.map(c=>`<option value="${esc(c.id)}" ${v.clientId===c.id?"selected":""}>${esc(dname(c))}</option>`).join("")}</select></div>
+      <div class="row"><div class="field w-md"><label for="t-due">Due (optional)</label><input id="t-due" type="date" value="${esc(v.due||"")}" data-keep="no"></div>
+        <div class="field w-md"><label for="t-stage">Column</label><select id="t-stage" data-keep="no">${STAGES.map(([k,l])=>`<option value="${k}" ${v.stage===k?"selected":""}>${l.replace(" this week","")}</option>`).join("")}</select></div></div>
+      <div class="actions"><button class="btn primary" type="submit">${tk?"Save":"Add task"}</button><button class="btn ghost" type="button" data-act="close">Cancel</button>
+        ${tk?(d.confirmDel?`<button class="btn danger" type="button" data-act="task-del" style="margin-left:auto">Delete?</button>`:`<button class="btn ghost danger" type="button" data-act="task-del-ask" style="margin-left:auto">Delete</button>`):""}</div>
+      <p class="muted small" style="margin:0">To add a step to a client project instead, open the project and add a component.</p>
+    </form></div></aside>`;
+  setTimeout(()=>{const n=$("#t-name");if(n&&!tk)n.focus()},30);
+}
+async function saveTask(){
+  const d=S.drawer;const name=$("#t-name").value.trim();if(!name){toast("Name the task.");$("#t-name").focus();return}
+  const prev=d.id?S.tasks.find(x=>x.id===d.id):null;const stage=$("#t-stage").value;
+  const doc=Object.assign({},prev||{},{name,clientId:$("#t-for").value,due:$("#t-due").value||"",stage,updatedAt:new Date().toISOString()});delete doc.id;
+  if(!prev){doc.createdAt=new Date().toISOString();doc.by=S.me&&S.me.username}
+  if(!prev||prev.stage!==stage){doc.stageAt=today();doc.doneDate=stage==="done"?today():null}
+  const ok=await write(db=>db.doc("tasks/"+(d.id||uid())).set(doc),prev?"Task saved":"Task added");if(ok){S.drawer=null;renderDrawer()}
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",e=>{
+  const v=e.target.closest("#proj-view button[data-v]");if(v){S.projView=v.dataset.v;try{localStorage.setItem("jcrm-projview",S.projView)}catch(err){}render();return}
+  const c=e.target.closest(".kfilters [data-bc]");if(c){S.bClient=c.dataset.bc;render();return}
+  const b=e.target.closest("[data-act]");const a=b&&b.dataset.act;
+  if(a==="b-week"){S.bWeek=!S.bWeek;render();return}
+  if(a==="b-old"){S.bShowOld=!S.bShowOld;render();return}
+  if(a==="task-new"){S.drawer={type:"task",id:"",clientId:S.bClient&&S.bClient!=="__me"?S.bClient:""};renderDrawer();return}
+  if(a==="task-edit"){const k=b.closest(".kcard");S.kMenu=null;S.drawer={type:"task",id:k.dataset.id};render();return}
+  if(a==="task-del-ask"){S.drawer.confirmDel=true;renderDrawer();return}
+  if(a==="task-del"){const id=S.drawer.id;write(db=>db.doc("tasks/"+id).delete(),"Task deleted").then(ok=>{if(ok){S.drawer=null;renderDrawer()}});return}
+  if(a==="k-menu"){e.stopPropagation();const k=b.closest(".kcard");const key=k.dataset.kind+":"+k.dataset.id;S.kMenu=S.kMenu===key?null:key;render();return}
+  if(a==="k-move"){const k=b.closest(".kcard");S.kMenu=null;moveCard(k.dataset.kind,k.dataset.id,b.dataset.stage).then(()=>render());return}
+  if(a==="k-open"){const k=b.closest(".kcard");S.kMenu=null;openProject(k.dataset.pid);return}
+  // clicking the card itself opens it
+  const kc=e.target.closest(".kcard");
+  if(kc&&!e.target.closest(".kmenu,.kmenu-btn")){S.kMenu=null;if(kc.dataset.kind==="task"){S.drawer={type:"task",id:kc.dataset.id};render()}else openProject(kc.dataset.pid);return}
+  if(S.kMenu&&!e.target.closest(".kmenu")){S.kMenu=null;render()}
+});
+document.addEventListener("keydown",e=>{const kc=e.target.closest&&e.target.closest(".kcard");if(kc&&e.key==="Enter"&&e.target===kc){kc.click()}});
+document.addEventListener("change",e=>{if(e.target.id==="b-proj"){S.bProject=e.target.value;render()}});
+document.addEventListener("submit",async e=>{
+  if(e.target.id==="f-task"){e.preventDefault();await saveTask();return}
+  const f=e.target.closest(".kadd");if(f){e.preventDefault();const inp=f.querySelector("input");const name=inp.value.trim();if(!name)return;
+    const pid=S.bProject&&S.bProject!=="__tasks"?S.bProject:"";
+    if(pid){const p=S.projects[pid];const comps=(p.components||[]).concat([{id:uid()+Math.random().toString(36).slice(2,5),name,due:"",done:false,stage:f.dataset.stage,stageAt:today()}]);
+      await write(db=>db.doc("projects/"+pid).update({components:comps,updatedAt:new Date().toISOString()}),"Added to "+p.name)}
+    else await write(db=>db.doc("tasks/"+uid()).set({name,clientId:S.bClient&&S.bClient!=="__me"?S.bClient:"",due:"",stage:f.dataset.stage,stageAt:today(),createdAt:new Date().toISOString(),by:S.me&&S.me.username}),"Task added");
+    const again=document.querySelector(`.kadd[data-stage="${f.dataset.stage}"] input`);if(again)again.focus()}
+});
+
+document.addEventListener("click",e=>{const b=e.target.closest("[data-act='task-open']");if(!b)return;e.preventDefault();S.drawer={type:"task",id:b.dataset.id};renderDrawer()});
+
 })();
