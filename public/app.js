@@ -1388,7 +1388,7 @@ function viewHome(){
     <section class="panel">
       <h2>Reminders &amp; follow-ups</h2>
       ${rems.length||fus.length?`<div class="hlist">${rems.map(r=>{const c=cl(r.clientId);return `<div class="hrow ${r.date<t?"over":r.date===t?"today":""}">
-          <span class="when">${esc(relDay(r.date))}${r.time?`<span class="muted small"> ${esc(fmtTime(r.time))}</span>`:""}</span>
+          <span class="when stack"><span>${esc(relDay(r.date))}</span>${r.time?`<span class="muted small">${esc(fmtTime(r.time))}</span>`:""}</span>
           <span class="what">${esc(r.text)}<span class="muted small">${c?" · "+cLink(c.id):""}</span></span>
           <span class="x">${c?`<button class="btn sm ghost" data-act="demo-cal">Calendar</button>`:""}<button class="btn sm ghost" data-act="rem-done" data-id="${esc(r.id)}">Done</button></span></div>`}).join("")}
         ${fus.map(({c,f})=>`<div class="hrow cold"><span class="when">Follow up</span><span class="what">${cLink(c.id)}<span class="muted small"> · ${esc(f.why)}</span></span><span class="x"><a class="btn sm ghost" href="#c/${esc(encodeURIComponent(c.id))}">Open</a></span></div>`).join("")}</div>`
@@ -1397,11 +1397,11 @@ function viewHome(){
     </section>
     <section class="panel">
       <h2>Due soon</h2>
-      ${dueItems.length?`<div class="hlist">${dueItems.map(d=>`<div class="hrow ${d.date<t?"over":d.date===t?"today":""}">
+      ${dueItems.length?`<div class="hlist">${dueItems.map(d=>{const who=d.t?forLabel(d.t.clientId):(cl(d.p.clientId)?dname(cl(d.p.clientId)):"");return `<div class="hrow ${d.date<t?"over":d.date===t?"today":""}">
           <span class="when">${esc(relDay(d.date))}</span>
-          <span class="what">${d.t?`<a href="#" data-act="task-open" data-id="${esc(d.t.id)}">${esc(d.name)}</a><span class="muted small"> · Task · ${esc(forLabel(d.t.clientId))}</span>`
-            :`<a href="#p/${esc(encodeURIComponent(d.p.id))}">${esc(d.name)}</a><span class="muted small"> · ${d.kind==="Component"?esc(d.p.name)+" · ":""}${cl(d.p.clientId)?esc(dname(cl(d.p.clientId))):""}</span>`}</span>
-          <span class="x"><button class="btn sm ghost" data-act="demo-cal">Calendar</button></span></div>`).join("")}</div>`
+          <span class="what stack">${d.t?`<a href="#" data-act="task-open" data-id="${esc(d.t.id)}">${esc(d.name)}</a>`
+            :`<a href="#p/${esc(encodeURIComponent(d.p.id))}">${esc(d.name)}</a>`}${who?`<span class="muted small">${esc(who)}</span>`:""}</span>
+          <span class="x"><button class="btn sm ghost" data-act="demo-cal">Calendar</button></span></div>`}).join("")}</div>`
         :`<p class="muted small">No project or task deadlines in the next two weeks.</p>`}
     </section>
     <section class="panel">
